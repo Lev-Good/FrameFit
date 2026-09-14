@@ -71,6 +71,24 @@ dotnet test tests/FrameFit.Core.Tests
 dotnet run --project src/FrameFit.App -- --self-test
 ```
 
+### בניית המתקין
+
+‏WiX נשמר ככלי ברמת הפרויקט (`.config/dotnet-tools.json`) ואינו מותקן על המחשב:
+
+```bash
+dotnet tool restore
+
+dotnet publish src/FrameFit.App/FrameFit.App.csproj \
+  -c Release -r win-x64 --self-contained \
+  -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
+  -p:EnableCompressionInSingleFile=true -p:DebugType=none -o publish/single
+
+dotnet build installer/FrameFit.wixproj -c Release
+
+# בדיקת קבלה: התקנה, אימות, הרצת הקובץ שהותקן, והסרה
+powershell -File installer/test-install.ps1 -Msi installer/bin/x64/Release/FrameFit-v0.1.0-x64.msi
+```
+
 אפשרויות נוספות:
 
 | דגל | משמעות |
