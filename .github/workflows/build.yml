@@ -42,29 +42,45 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: פרסום עצמאי (self-contained)
+      - name: שחזור כלי האריזה (WiX)
+        run: dotnet tool restore
+
+      # קובץ הרצה אחד בלבד: כל הספריות הנייטיב של WPF נכללות בתוכו.
+      - name: פרסום ניידי (קובץ אחד)
         run: >
           dotnet publish src/FrameFit.App/FrameFit.App.csproj
           -c Release -r win-x64 --self-contained true
-          -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true
-          -o publish
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true -p:DebugType=none
+          -o publish/single
 
-      - name: אריזה
+      - name: בניית המתקין (MSI)
+        run: >
+          dotnet build installer/FrameFit.wixproj -c Release
+          -p:OutputName=FrameFit-${{ github.ref_name }}-x64
+
+      - name: הכנת הקבצים וסכומי הבדיקה
         shell: pwsh
         run: |
-          # סמלי ניפוי נחוצים לפיתוח ולא להפצה.
-          Remove-Item publish/*.pdb -Force -ErrorAction SilentlyContinue
+          $version = "${{ github.ref_name }}"
+          $portable = "FrameFit-$version-win-x64-portable.exe"
+          $msi = "FrameFit-$version-x64.msi"
 
-          $name = "FrameFit-${{ github.ref_name }}-win-x64"
-          Compress-Archive -Path publish/* -DestinationPath "$name.zip"
-          $hash = (Get-FileHash "$name.zip" -Algorithm SHA256).Hash
+          Copy-Item publish/single/FrameFit.exe $portable
+          Copy-Item "installer/bin/x64/Release/FrameFit-$version-x64.msi" $msi
+
           # כתיבת סכום הבדיקה בפורמט סטנדרטי: hash ואחריו שני רווחים ושם הקובץ.
-          "$hash  $name.zip" | Out-File -FilePath "$name.zip.sha256" -Encoding ascii -NoNewline
+          foreach ($file in @($portable, $msi)) {
+            $hash = (Get-FileHash $file -Algorithm SHA256).Hash
+            "$hash  $file" | Out-File -FilePath "$file.sha256" -Encoding ascii -NoNewline
+          }
 
       - name: העלאה למהדורה
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            FrameFit-*.zip
-            FrameFit-*.zip.sha256
+            FrameFit-*-win-x64-portable.exe
+            FrameFit-*-win-x64-portable.exe.sha256
+            FrameFit-*-x64.msi
+            FrameFit-*-x64.msi.sha256
           generate_release_notes: false

@@ -212,9 +212,17 @@ visibleRect.height = monitor.height - margin.top  - margin.bottom
 
 ## 8. בנייה, אריזה והפצה
 
-* `dotnet publish -c Release -r win-x64 --self-contained` ⇒ קובץ הרצה עצמאי.
-* אריזה: Inno Setup (או MSI/WiX) — התקנה למשתמש, רישום הפעלה אוטומטית, הסרה נקייה.
-* CI ב-GitHub Actions על `windows-latest`: build ← test ← publish ← העלאת ארטיפקט ל-Release.
+* `dotnet publish -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
+  -p:IncludeNativeLibrariesForSelfExtract=true` ⇒ **קובץ הרצה אחד** ובו כל ספריות WPF הנייטיב
+  (בלי תיקיית קבצים נלווית).
+* אריזה: **MSI ב-WiX 5** (`installer/FrameFit.wixproj` + `installer/FrameFit.wxs`) — התקנה
+  **למשתמש** (`Scope="perUser"`) אל `%LOCALAPPDATA%\FrameFit`, קיצור דרך בתפריט התחל,
+  והסרה נקייה דרך "הוספה או הסרה של תוכניות". ראו [DECISIONS.md](DECISIONS.md#d10).
+  ההפעלה האוטומטית **אינה** נכפית בהתקנה — היא נשארת הגדרה בתוך התוכנה (`HKCU\...\Run`).
+* כלי ה-WiX מותקן **ברמת הפרויקט** (`.config/dotnet-tools.json`, `dotnet tool restore`) ולא
+  על המחשב — כדי שדחיפת קוד רגילה לא תדרוש אותו.
+* CI ב-GitHub Actions על `windows-latest`: build ← test ← publish (קובץ בודד) ← בניית MSI ←
+  כתיבת קובצי `SHA-256` ← העלאה ל-Release.
 * גרסה סמנטית; כל מהדורה מתועדת ב-[CHANGELOG.md](CHANGELOG.md).
 * חתימה דיגיטלית: **לא נדרשת** לפי החלטת המשתמש (Q6). בכל מהדורה יפורסם **SHA-256** של
   קובץ ההתקנה, וה-README יסביר מראש את אזהרת SmartScreen (NFR-10).
@@ -230,3 +238,4 @@ visibleRect.height = monitor.height - margin.top  - margin.bottom
 | DPI מעורב / מסך משני עם scale שונה | חישובי מיקום שגויים | Per-Monitor V2 + חישוב בקואורדינטות פיזיות בלבד |
 | סשן RDP או נעילת מסך | גיאומטריה שונה זמנית | עצירה אוטומטית בזמן ניתוק/נעילה, החזרה בהתחברות |
 | SmartScreen בהתקנה | חיכוך למשתמש | מתועד; אפשרות חתימה בהמשך |
+| מהדורה נבנית ידנית **וגם** ב-CI בעת דחיפת תגית | ה-CI דורס קבצים שהועלו ידנית | הסדר שנקבע: לדחוף תגית ולתת ל-CI לבנות, או ליצור מהדורה ידנית בלי לדחוף תגית |

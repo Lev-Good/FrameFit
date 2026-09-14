@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <!--
+    מתקין MSI רגיל.
+
+    הבחירה ב-Scope="perUser" היא מכוונת: ההתקנה אינה דורשת הרשאות מנהל, ולכן אפשר
+    לפרוס את FrameFit על עמדת תצוגה בלי לפנות לאחראי ה-IT. הקובץ מותקן תחת
+    %LOCALAPPDATA%\Programs\FrameFit, ונוצרת קיצור דרך בתפריט התחל.
+  -->
+  <Package
+      Name="FrameFit"
+      Manufacturer="Lev-Good"
+      Version="0.1.0.0"
+      UpgradeCode="7F3A9C41-5B2E-4D8A-9E16-2C4B7D5A1F30"
+      Scope="perUser"
+      Language="1037"
+      Codepage="1255"
+      InstallerVersion="500"
+      Compressed="yes">
+
+    <SummaryInformation
+        Description="FrameFit — התאמת אזור התצוגה למסגרת"
+        Manufacturer="Lev-Good" />
+
+    <!-- התקנה של גרסה חדשה מעל ישנה, עם הודעה ברורה על נסיגה לאחור. -->
+    <MajorUpgrade DowngradeErrorMessage="מותקנת כבר גרסה חדשה יותר של FrameFit." />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <!--
+      מסך הפתיחה והסיום של האשף. WixUI_Minimal מציג דף רישיון ואז מתקין —
+      מספיק לכלי עזר, ואינו מעמיס דפים מיותרים.
+    -->
+    <ui:WixUI Id="WixUI_Minimal" />
+    <WixVariable Id="WixUILicenseRtf" Value="license.rtf" />
+
+    <!--
+      ההתקנה יורדת ישירות אל %LOCALAPPDATA%\FrameFit ולא לתוך תיקיית Programs
+      המשותפת — כדי שלא לגעת בתיקייה שמשתמשות בה תוכנות אחרות של המשתמש.
+    -->
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="INSTALLFOLDER" Name="FrameFit">
+        <Component Id="MainExecutable" Guid="C6E8F1A3-2D47-4B09-A5E1-83C7B0D94F62">
+          <!--
+            קובץ הרצה אחד בלבד: כל מה שנדרש כלול בתוכו.
+            הנתיב מגיע כמשתנה מהפרויקט (‎$(var.PublishDir)‎) ולא כנתיב יחסי,
+            כדי שלא יהיה תלוי בתיקייה שבה יושב קובץ ההגדרה הזה.
+          -->
+          <File Id="FrameFitExe" Source="$(var.PublishDir)FrameFit.exe" KeyPath="no" />
+
+          <!--
+            מפתח זה הוא ה-KeyPath של הרכיב. נדרש עבור התקנה בפרופיל המשתמש,
+            ומאפשר ל-MSI לזהות את ההתקנה ולהסיר אותה כראוי.
+          -->
+          <RegistryValue Root="HKCU" Key="Software\Lev-Good\FrameFit" Name="InstallFolder"
+                         Type="string" Value="[INSTALLFOLDER]" KeyPath="yes" />
+
+          <RemoveFolder Id="RemoveInstallFolder" Directory="INSTALLFOLDER" On="uninstall" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="FrameFit">
+        <Component Id="StartMenuShortcut" Guid="B4C1D0E2-77A5-4F3B-8C29-5D6E1A7B9C08">
+          <Shortcut
+              Id="FrameFitShortcut"
+              Name="FrameFit"
+              Description="התאמת אזור התצוגה לשטח המסך שגלוי בפועל"
+              Target="[INSTALLFOLDER]FrameFit.exe"
+              WorkingDirectory="INSTALLFOLDER" />
+          <RemoveFolder Id="RemoveApplicationProgramsFolder" Directory="ApplicationProgramsFolder" On="uninstall" />
+          <!-- מפתח זה הוא ה-KeyPath של הרכיב, ומאפשר ל-MSI לדעת מתי להסיר אותו. -->
+          <RegistryValue Root="HKCU" Key="Software\Lev-Good\FrameFit" Name="StartMenuShortcut"
+                         Type="integer" Value="1" KeyPath="yes" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+
+    <!--
+      הערת ICE91 מושתקת באופן ממוקד ולא ICE38/ICE64: היא מתלוננת שהקובץ מותקן
+      לתיקייה שאינה תלויה ב-ALLUSERS, וזה מדויק — החבילה מוגדרת Scope="perUser"
+      במפורש, ולכן ההערה אינה רלוונטית.
+    -->
+
+    <!-- הפעלה אוטומטית אינה נכבפת על ידי המתקין: זו הגדרה בתוך התוכנה עצמה. -->
+  </Package>
+</Wix>
