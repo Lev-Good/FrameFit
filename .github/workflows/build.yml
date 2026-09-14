@@ -52,6 +52,9 @@ jobs:
       - name: אריזה
         shell: pwsh
         run: |
+          # סמלי ניפוי נחוצים לפיתוח ולא להפצה.
+          Remove-Item publish/*.pdb -Force -ErrorAction SilentlyContinue
+
           $name = "FrameFit-${{ github.ref_name }}-win-x64"
           Compress-Archive -Path publish/* -DestinationPath "$name.zip"
           $hash = (Get-FileHash "$name.zip" -Algorithm SHA256).Hash
