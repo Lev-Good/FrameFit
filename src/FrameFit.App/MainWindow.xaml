@@ -1,0 +1,223 @@
+<Window x:Class="FrameFit.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="FrameFit — התאמת אזור התצוגה למסגרת"
+        Height="720" Width="1000"
+        MinHeight="640" MinWidth="900"
+        FlowDirection="RightToLeft"
+        WindowStartupLocation="CenterScreen"
+        Background="#FFF3F4F6"
+        FontFamily="Segoe UI" FontSize="14">
+
+    <Window.Resources>
+        <Style TargetType="Button">
+            <Setter Property="Padding" Value="14,8" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="MinWidth" Value="120" />
+        </Style>
+        <Style TargetType="CheckBox">
+            <Setter Property="Margin" Value="0,6,0,6" />
+        </Style>
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="White" />
+            <Setter Property="BorderBrush" Value="#FFE5E7EB" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="16" />
+            <Setter Property="Margin" Value="0,0,0,12" />
+        </Style>
+        <Style TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="SectionTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,0,0,10" />
+        </Style>
+        <Style x:Key="Muted" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#FF6B7280" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- בחירת מסך -->
+        <Border Grid.Row="0" Style="{StaticResource Card}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0" Text="המסך שעליו פועל FrameFit:" Margin="0,0,10,0" />
+
+                <ComboBox Grid.Column="1"
+                          ItemsSource="{Binding Displays}"
+                          SelectedItem="{Binding SelectedDisplay}"
+                          DisplayMemberPath="FriendlyName"
+                          Height="30" />
+
+                <TextBlock Grid.Column="2" Style="{StaticResource Muted}" Margin="12,0,0,0">
+                    <Run Text="{Binding MonitorSizeText, Mode=OneWay}" />
+                    <Run Text="פיקסלים" />
+                </TextBlock>
+            </Grid>
+        </Border>
+
+        <!-- גוף -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- שוליים -->
+            <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="שוליים מוסתרים (בפיקסלים)" Style="{StaticResource SectionTitle}" />
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="70" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="70" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="שמאל" />
+                        <Slider Grid.Row="0" Grid.Column="1" Margin="8,0"
+                                Minimum="0" Maximum="{Binding MaxLeft, Mode=OneWay}"
+                                Value="{Binding Left, Mode=TwoWay}" />
+                        <TextBox Grid.Row="0" Grid.Column="2"
+                                 Text="{Binding Left, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 TextAlignment="Center" />
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="ימין" />
+                        <Slider Grid.Row="1" Grid.Column="1" Margin="8,0"
+                                Minimum="0" Maximum="{Binding MaxRight, Mode=OneWay}"
+                                Value="{Binding Right, Mode=TwoWay}" />
+                        <TextBox Grid.Row="1" Grid.Column="2"
+                                 Text="{Binding Right, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 TextAlignment="Center" />
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="למעלה" />
+                        <Slider Grid.Row="2" Grid.Column="1" Margin="8,0"
+                                Minimum="0" Maximum="{Binding MaxTop, Mode=OneWay}"
+                                Value="{Binding Top, Mode=TwoWay}" />
+                        <TextBox Grid.Row="2" Grid.Column="2"
+                                 Text="{Binding Top, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 TextAlignment="Center" />
+
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="למטה" />
+                        <Slider Grid.Row="3" Grid.Column="1" Margin="8,0"
+                                Minimum="0" Maximum="{Binding MaxBottom, Mode=OneWay}"
+                                Value="{Binding Bottom, Mode=TwoWay}" />
+                        <TextBox Grid.Row="3" Grid.Column="2"
+                                 Text="{Binding Bottom, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 TextAlignment="Center" />
+                    </Grid>
+
+                    <Button Content="אפס שוליים" Command="{Binding ResetMarginsCommand}"
+                            HorizontalAlignment="Right" Margin="0,14,0,0" MinWidth="110" />
+
+                    <TextBlock Text="{Binding MarginHint}" Style="{StaticResource Muted}"
+                               TextWrapping="Wrap" Margin="0,12,0,0" />
+                    <TextBlock Text="{Binding AsymmetryText}" Style="{StaticResource Muted}"
+                               TextWrapping="Wrap" Margin="0,4,0,0" />
+                    <TextBlock Text="{Binding PhysicalHint}" Style="{StaticResource Muted}"
+                               TextWrapping="Wrap" Margin="0,4,0,0" />
+                </StackPanel>
+            </Border>
+
+            <!-- תצוגה מקדימה -->
+            <Border Grid.Row="0" Grid.Column="1" Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="תצוגה מקדימה" Style="{StaticResource SectionTitle}" />
+
+                    <Border Width="320" Height="180" Background="#FF111827"
+                            BorderBrush="#FF9CA3AF" BorderThickness="1"
+                            HorizontalAlignment="Center">
+                        <Border Margin="{Binding MiniMargins}" Background="#FFFFFFFF"
+                                BorderBrush="#FF1F6FEB" BorderThickness="1">
+                            <TextBlock Text="{Binding VisibleAreaText}"
+                                       Foreground="#FF374151" FontSize="12"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                    </Border>
+
+                    <TextBlock Text="{Binding VisibleRatioText}" Style="{StaticResource Muted}"
+                               HorizontalAlignment="Center" Margin="0,10,0,0" />
+
+                    <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,10,0,0"
+                               Text="&quot;תצוגה מקדימה&quot; מציגה את השוליים על המסך האמיתי עם סרגל פיקסלים, כדי ליישר מול המסגרת הפיזית. השינוי מוצג מיד עם כל תזוזה." />
+
+                    <TextBlock Text="{Binding PanicHint}" Style="{StaticResource Muted}"
+                               TextWrapping="Wrap" Margin="0,10,0,0" />
+                </StackPanel>
+            </Border>
+
+            <!-- אפשרויות ולוג -->
+            <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="מנגנוני אכיפה" Style="{StaticResource SectionTitle}" />
+                    <CheckBox Content="שכבת כיסוי שחורה על השוליים"
+                              IsChecked="{Binding BlackoutMargins}" />
+                    <CheckBox Content="חסימת סמן העכבר לאזור הגלוי"
+                              IsChecked="{Binding ClampCursor}" />
+                    <CheckBox Content="התאמת חלונות מסך-מלא לאזור הגלוי"
+                              IsChecked="{Binding RefitFullscreen}" />
+                    <CheckBox Content="צמצום אזור העבודה של Windows — מקסם ו-Snap יכבדו את השוליים (מומלץ)"
+                              IsChecked="{Binding ReserveWorkArea}" />
+                    <CheckBox Content="הפעל את FrameFit עם עליית Windows"
+                              IsChecked="{Binding StartWithWindows}" />
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="יומן פעילות" Style="{StaticResource SectionTitle}" />
+                    <ListBox ItemsSource="{Binding LogLines}" Height="150"
+                             FontFamily="Consolas" FontSize="11"
+                             ScrollViewer.HorizontalScrollBarVisibility="Auto" />
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- פעולות -->
+        <Border Grid.Row="2" Style="{StaticResource Card}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Text="{Binding StatusText}" TextWrapping="Wrap"
+                           Margin="0,0,0,10" />
+
+                <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Left">
+                    <Button Content="{Binding PreviewButtonText}" Command="{Binding PreviewCommand}" />
+                    <Button Content="החל ושמור" Command="{Binding ApplyCommand}" FontWeight="SemiBold" />
+                    <Button Content="שחזר הכול" Command="{Binding RevertCommand}" />
+                    <Button Content="העתק דוח אבחון" Command="{Binding CopyDiagnosticsCommand}" />
+                    <Button Content="יציאה" Click="ExitClicked" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

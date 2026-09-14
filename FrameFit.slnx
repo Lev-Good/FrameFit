@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/FrameFit.App/FrameFit.App.csproj" />
+    <Project Path="src/FrameFit.Core/FrameFit.Core.csproj" />
+    <Project Path="src/FrameFit.Platform.Windows/FrameFit.Platform.Windows.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,38 @@
+# .NET build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+*.suo
+*.userprefs
+
+# Visual Studio / Rider
+.vs/
+.idea/
+*.sln.docstates
+
+# Test results
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+coverage*.xml
+
+# Build artifacts
+artifacts/
+publish/
+*.zip
+*.msi
+*.exe
+
+# Local self-test output
+selftest.txt
+framefit-selftest.txt
+
+# OS
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# כלי עבודה מקומיים
+.freebuff/

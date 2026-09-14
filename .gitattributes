@@ -1,0 +1,7 @@
+# שמירה על סופי שורה אחידים בריפו, בלי תלות במערכת ההפעלה של מי שמפתח.
+* text=auto eol=lf
+
+*.png binary
+*.ico binary
+*.zip binary
+*.exe binary
