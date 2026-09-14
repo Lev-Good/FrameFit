@@ -1,7 +1,7 @@
 # בדיקת קבלה למתקין: התקנה שקטה, אימות, הרצת הקובץ שהותקן, והסרה מלאה.
 #
 # שימוש:
-#   pwsh -File installer/test-install.ps1 -Msi installer/bin/x64/Release/FrameFit-v0.1.0-x64.msi
+#   pwsh -File installer/test-install.ps1 -Msi installer/bin/x64/Release/FrameFit-v0.1.4-x64.msi
 #
 # הקובץ מועתק לתיקיית עבודה בנתיב ASCII קבוע (C:\Users\Public), ולא ל-%TEMP%.
 # שני נימוקים: (1) msiexec וקידוד הנתיבים נכשלים בשקט כשהנתיב מכיל תווים עבריים;

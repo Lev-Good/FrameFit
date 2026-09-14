@@ -5,10 +5,15 @@
     לא תדרוש את כלי ה-WiX.
 
     WiX נבחר בגרסה 5 ולא 7: גרסה 7 דורשת הסכמה ל-Open Source Maintenance Fee,
-    ואילו גרסה 5 חופשית (MIT).
+    ואילו גרסה 5 פטורה מהיטל זה.
+
+    הרישיון של WiX (בכל הגרסאות) הוא MS-RL — Microsoft Reciprocal License — ולא MIT.
+    הוא רישיון הדדי החל על קוד המקור של WiX עצמו; הוא אינו מחייב לפתוח את המקור של
+    המתקין שנבנה באמצעותו, אך הוא כן מחייב לשמר את הודעת הזכויות של WiX בהפצה.
+    ראו THIRD-PARTY-NOTICES.md.
   -->
   <PropertyGroup>
-    <OutputName>FrameFit-v0.1.0-x64</OutputName>
+    <OutputName>FrameFit-v0.1.4-x64</OutputName>
     <OutputType>Package</OutputType>
     <Platform>x64</Platform>
     <InstallerPlatform>x64</InstallerPlatform>

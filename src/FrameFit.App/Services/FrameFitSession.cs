@@ -22,6 +22,7 @@ public sealed record SessionState(
     bool WorkAreaActive,
     bool CursorClamped,
     bool WatcherActive,
+    string TaskbarState,
     int RefitCount,
     int UncooperativeCount);
 
@@ -46,6 +47,12 @@ public sealed class FrameFitSession : IDisposable
         _log = log;
         _store = new ProfileStore(AppPaths.SettingsFile);
         Settings = _store.Load(out var wasReset);
+
+        // אם התהליך הקודם נהרג בעוד סרגל המשימות מוסתר — מחזירים אותו לפני כל פעולה אחרת.
+        if (TaskbarHost.TryRecoverAbandoned(out var recoveryMessage))
+        {
+            _log.Write(recoveryMessage);
+        }
 
         if (wasReset)
         {
@@ -142,8 +149,8 @@ public sealed class FrameFitSession : IDisposable
 
         if (options.ReserveWorkArea)
         {
-            _workArea = new WorkAreaHost();
-            if (_workArea.TryApply(display.Bounds, margins, out var workAreaMessage))
+            _workArea = new WorkAreaHost(_log.Write);
+            if (_workArea.TryApply(display.Bounds, margins, options.TaskbarMode, out var workAreaMessage))
             {
                 _log.Write(workAreaMessage);
             }
@@ -189,7 +196,8 @@ public sealed class FrameFitSession : IDisposable
                 BlackoutMargins = options.BlackoutMargins,
                 ClampCursor = options.ClampCursor,
                 RefitFullscreen = options.RefitFullscreen,
-                ReserveWorkArea = options.ReserveWorkArea
+                ReserveWorkArea = options.ReserveWorkArea,
+                TaskbarMode = options.TaskbarMode
             }
         };
 
@@ -246,8 +254,36 @@ public sealed class FrameFitSession : IDisposable
         WorkAreaActive: _workArea?.IsActive ?? false,
         CursorClamped: CursorClamp.IsActive,
         WatcherActive: _watcher is not null,
+        TaskbarState: DescribeTaskbarState(),
         RefitCount: _watcher?.RefitCount ?? 0,
         UncooperativeCount: _watcher?.UncooperativeWindows.Count ?? 0);
+
+    /// <summary>מה נעשה עם סרגל המשימות של המסך המנוהל, בלשון האדם.</summary>
+    private string DescribeTaskbarState()
+    {
+        if (_workArea is null)
+        {
+            return "מנגנון אזור העבודה כבוי";
+        }
+
+        if (_workArea.TaskbarMoved)
+        {
+            return "עוגן בתוך האזור הגלוי";
+        }
+
+        if (_workArea.TaskbarHidden)
+        {
+            return "הוסתר";
+        }
+
+        return _workArea.TaskbarMode switch
+        {
+            TaskbarMode.LeaveInPlace => "ללא התערבות (נשאר במקומו)",
+            _ => _workArea.Taskbar.IsAttached
+                ? "נשאר במקומו — Windows החזיר אותו (אי אפשר להזיז את הסרגל)"
+                : "לא טופל — אין סרגל משימות במסך הזה"
+        };
+    }
 
     public string BuildDiagnostics() => DiagnosticsService.BuildReport(
         _displayProvider.GetDisplays(),
@@ -258,7 +294,26 @@ public sealed class FrameFitSession : IDisposable
         cursorClamped: CursorClamp.IsActive,
         watcherActive: _watcher is not null,
         refitCount: _watcher?.RefitCount ?? 0,
-        uncooperativeCount: _watcher?.UncooperativeWindows.Count ?? 0);
+        uncooperativeCount: _watcher?.UncooperativeWindows.Count ?? 0,
+        workAreaStatus: BuildWorkAreaStatus());
+
+    /// <summary>מצב אזור העבודה וסרגל המשימות לדוח האבחון.</summary>
+    private WorkAreaStatus? BuildWorkAreaStatus()
+    {
+        if (TargetDisplay is null)
+        {
+            return null;
+        }
+
+        return new WorkAreaStatus(
+            TaskbarState: DescribeTaskbarState(),
+            ExpectedWorkArea: _workArea?.AppliedPlan?.ExpectedWorkArea,
+            Shortfall: _workArea?.Shortfall ?? ReservedInsets.None,
+            TaskbarAnchor: _workArea?.TaskbarAnchor ?? 0,
+            TaskbarDescription: _workArea?.Taskbar is { } taskbar
+                ? taskbar.Describe(TargetDisplay.Bounds, CurrentMargins)
+                : "מנגנון אזור העבודה כבוי");
+    }
 
     private void StopInternal()
     {

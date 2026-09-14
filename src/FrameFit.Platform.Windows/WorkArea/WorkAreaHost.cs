@@ -1,47 +1,122 @@
 using System.Runtime.InteropServices;
 using FrameFit.Core.Geometry;
+using FrameFit.Core.Profiles;
 using FrameFit.Platform.Windows.Interop;
 
 namespace FrameFit.Platform.Windows.WorkArea;
 
 /// <summary>
 /// שכבה 1 — צמצום "אזור העבודה" של Windows דרך סרגלי יישום (AppBar).
-/// מרגע שהאזור מצומצם, מקסם, סרגל המשימות ו-Snap מכבדים את השוליים בלי שום התערבות נוספת.
 ///
-/// מנגנון זה מסומן באפיון כניסיוני (ספיק S0.1) ולכן הוא כבוי כברירת מחדל בממשק.
+/// הרגישות כאן היא ש-Windows כבר הקצה מקום משלו לפני שהגענו: סרגל המשימות תופס את
+/// שורת התחתית של המסך, וסרגל יישום שמוזמן על אותו צד נדחק מעליו. הזמנת שוליים בגובה
+/// מלא הייתה איפוא מקטינה את אזור העבודה ביותר מהנדרש — ומשאירה רצועה בגובה סרגל
+/// המשימות בתוך האזור הגלוי. לכן אנו מודדים קודם מה כבר הוקצה, ומזמינים בכל צד את
+/// ההפרש בלבד (ראו <see cref="WorkAreaCalculator"/>).
 /// </summary>
 public sealed class WorkAreaHost : IDisposable
 {
     private const string CallbackMessageName = "FrameFitAppBarMessage";
 
     private readonly List<AppBar> _bars = new();
+    private readonly TaskbarHost _taskbar;
+    private readonly Action<string> _log;
+
     private bool _disposed;
     private PixelRect _monitor;
     private MarginSet _margins = MarginSet.Empty;
 
+    public WorkAreaHost(Action<string>? log = null)
+    {
+        _log = log ?? (_ => { });
+        _taskbar = new TaskbarHost(_log);
+    }
+
     public bool IsActive => _bars.Count > 0;
+
+    /// <summary>האם FrameFit הסתיר כרגע את סרגל המשימות של המסך המנוהל.</summary>
+    public bool TaskbarHidden => _taskbar.IsHiddenByUs;
+
+    /// <summary>האם FrameFit העביר כרגע את סרגל המשימות אל תוך האזור הגלוי.</summary>
+    public bool TaskbarMoved => _taskbar.IsMovedByUs;
+
+    /// <summary>הטיפול בסרגל המשימות שבו השתמשנו בהחלה האחרונה.</summary>
+    public TaskbarMode TaskbarMode { get; private set; } = TaskbarMode.LeaveInPlace;
+
+    /// <summary>סרגל המשימות שזוהה במסך המנוהל (אם יש).</summary>
+    public TaskbarHost Taskbar => _taskbar;
+
+    /// <summary>התוכנית שהוחלה לאחרונה, או null אם לא הוחל דבר.</summary>
+    public WorkAreaPlan? AppliedPlan { get; private set; }
+
+    /// <summary>הפיקסלים של האזור הגלוי שההקצאות הקיימות תופסות בכל זאת.</summary>
+    public ReservedInsets Shortfall => AppliedPlan?.Shortfall ?? ReservedInsets.None;
+
+    /// <summary>פיקסלים בתחתית האזור הגלוי שהוקצו לסרגל המשימות המעוגן.</summary>
+    public int TaskbarAnchor => AppliedPlan?.BottomAnchor ?? 0;
 
     /// <summary>
     /// מנסה להזמין את ארבעת השוליים כמקום שמור. מחזיר false עם הסבר אם משהו נכשל.
     /// </summary>
-    public bool TryApply(PixelRect monitor, MarginSet margins, out string message)
+    /// <param name="taskbarMode">
+    /// מה לעשות עם סרגל המשימות של המסך הזה. הפעולה מתבצעת לפני המדידה, כי ייתכן
+    /// שהיא משנה את אזור העבודה עצמו.
+    /// </param>
+    public bool TryApply(PixelRect monitor, MarginSet margins, TaskbarMode taskbarMode, out string message)
     {
         Revert();
 
         _monitor = monitor;
         _margins = margins;
+        TaskbarMode = taskbarMode;
 
-        var strips = BuildStrips(monitor, margins);
+        var beforeTaskbar = MeasuredReservation(monitor);
+
+        if (taskbarMode != TaskbarMode.LeaveInPlace)
+        {
+            if (!_taskbar.TryAttach(monitor, out var attachMessage))
+            {
+                _log(attachMessage);
+            }
+            else
+            {
+                var visible = VisibleAreaCalculator.Compute(monitor, margins);
+                var applied = taskbarMode == TaskbarMode.HideInHiddenArea
+                    ? _taskbar.Hide(out var note)
+                    : _taskbar.MoveInto(visible, out note);
+
+                _log(applied ? note : $"אזהרה: {note}");
+            }
+        }
+
+        // מה שכבר הוקצה במסך הזה (סרגל המשימות, סרגלי יישום אחרים) — נמדד בזמן אמת,
+        // אחרי הפעולה על הסרגל, כי ייתכן שהיא שינתה את אזור העבודה.
+        var existing = _taskbar.IsHandledByUs
+            ? MeasuredReservation(monitor, beforeTaskbar)
+            : MeasuredReservation(monitor);
+
+        // סרגל משימות שנעגן בתוך האזור הגלוי תופס בו מקום אמיתי. המקום הזה נגרע מאזור
+        // העבודה (ולא נחשב לגזילה מהשוליים), כדי שחלון ממוקם יסתיים מעל הסרגל במקום
+        // להיעלם מתחתיו.
+        var anchor = _taskbar.IsMovedByUs ? _taskbar.Rect.Height : 0;
+
+        var plan = WorkAreaCalculator.Plan(monitor, margins, existing, anchor);
+        AppliedPlan = plan;
+
+        _log($"הקצאות קיימות באזור העבודה: {existing}; " +
+             $"הוזמנו {plan.Strips.Count} סרגלים; אזור עבודה מצופה: {plan.ExpectedWorkArea}" +
+             (anchor > 0 ? $"; {anchor} פיקסלים בתחתית הוקצו לסרגל המשימות המעוגן." : "."));
+
         var callbackMessage = MessageWindow.RegisterMessage(CallbackMessageName);
 
         try
         {
-            foreach (var (edge, rect) in strips)
+            foreach (var (side, rect) in plan.Strips)
             {
-                var bar = new AppBar(edge, callbackMessage);
+                var bar = new AppBar(ToEdge(side), callbackMessage);
                 if (!bar.TryRegister(rect, out var error))
                 {
-                    message = $"הזמנת השוליים נכשלה (צד {edge}): {error}";
+                    message = $"הזמנת השוליים נכשלה (צד {side}): {error}";
                     Revert();
                     return false;
                 }
@@ -56,11 +131,11 @@ public sealed class WorkAreaHost : IDisposable
             return false;
         }
 
-        message = "אזור העבודה צומצם בהצלחה.";
+        message = BuildSummary(plan, monitor);
         return true;
     }
 
-    /// <summary>מסיר את כל הסרגלים ומחזיר את אזור העבודה למצבו המקורי.</summary>
+    /// <summary>מסיר את כל הסרגלים, מחזיר את סרגל המשימות ומשחזר את אזור העבודה.</summary>
     public void Revert()
     {
         foreach (var bar in _bars)
@@ -69,58 +144,71 @@ public sealed class WorkAreaHost : IDisposable
         }
 
         _bars.Clear();
+
+        AppliedPlan = null;
+
+        // מחזירים את סרגל המשימות *אחרי* הסרת הסרגלים, כדי שאזור העבודה יחזור למצבו המקורי.
+        _taskbar.Restore();
     }
 
-    private static List<(uint Edge, PixelRect Rect)> BuildStrips(PixelRect monitor, MarginSet margins)
-    {
-        var visibleWidth = Math.Max(0, monitor.Width - margins.TotalHorizontal);
-        var strips = new List<(uint, PixelRect)>(4);
-
-        if (margins.Left > 0)
-        {
-            strips.Add((Native.ABE_LEFT, new PixelRect(monitor.X, monitor.Y, margins.Left, monitor.Height)));
-        }
-
-        if (margins.Right > 0)
-        {
-            strips.Add((Native.ABE_RIGHT, new PixelRect(monitor.Right - margins.Right, monitor.Y, margins.Right, monitor.Height)));
-        }
-
-        if (margins.Top > 0)
-        {
-            strips.Add((Native.ABE_TOP, new PixelRect(monitor.X + margins.Left, monitor.Y, visibleWidth, margins.Top)));
-        }
-
-        if (margins.Bottom > 0)
-        {
-            strips.Add((Native.ABE_BOTTOM, new PixelRect(
-                monitor.X + margins.Left,
-                monitor.Bottom - margins.Bottom,
-                visibleWidth,
-                margins.Bottom)));
-        }
-
-        return strips;
-    }
+    /// <summary>מה שמערכת ההפעלה כבר הקצתה באזור העבודה של המסך הזה.</summary>
+    private static ReservedInsets MeasuredReservation(PixelRect monitor) =>
+        WorkAreaProbe.TryGetWorkArea(monitor) is { } workArea
+            ? ReservedInsets.Between(monitor, workArea)
+            : ReservedInsets.None;
 
     /// <summary>
-    /// האם אזור העובדה הנוכחי *נמצא בתוך* האזור הגלוי — כלומר שום פיקסל שלו אינו
-    /// נוגע באזור המוסתר.
-    ///
-    /// זו הדרישה האמיתית, ולא שוויון מדויק: אזור העבודה של Windows גם מפנה מקום
-    /// לסרגל המשימות, ולכן הוא עשוי להיות קטן יותר מהאזור הגלוי — וזה מצב תקין
-    /// ואף רצוי. הבעיה היחידה היא אם הוא חורג אל תוך השוליים המוסתרים.
+    /// ה-Shell מעדכן את אזור העבודה בהשהיה קצרה אחרי שינוי בסרגל המשימות. אם המדידה
+    /// עוד לא השתנתה, ממתינים לה בייצוב של עד 300 מ״ש — אחרת ההזמנה שלנו הייתה מקזזת
+    /// הקצאה שכבר אינה קיימת, וחלון ממוקם היה חורג אל תוך האזור המוסתר.
     /// </summary>
-    public static bool WorkAreaRespectsMargins(PixelRect monitor, PixelRect workArea, MarginSet margins)
+    private static ReservedInsets MeasuredReservation(PixelRect monitor, ReservedInsets beforeHiding)
     {
-        var visible = VisibleAreaCalculator.Compute(monitor, margins);
-        const int tolerance = 2;
+        var deadline = Environment.TickCount64 + 300;
 
-        return workArea.X >= visible.X - tolerance &&
-               workArea.Y >= visible.Y - tolerance &&
-               workArea.Right <= visible.Right + tolerance &&
-               workArea.Bottom <= visible.Bottom + tolerance;
+        while (true)
+        {
+            var measured = MeasuredReservation(monitor);
+
+            if (measured != beforeHiding || Environment.TickCount64 >= deadline)
+            {
+                return measured;
+            }
+
+            Thread.Sleep(40);
+        }
     }
+
+    private string BuildSummary(WorkAreaPlan plan, PixelRect monitor)
+    {
+        if (plan.IsExact)
+        {
+            return $"אזור העבודה צומצם כך שיכסה בדיוק את האזור הגלוי ({plan.Visible}).";
+        }
+
+        // עיגון הסרגל בתוך האזור הגלוי הוא מצב מכוון: התוכן והסרגל ממלאים יחד את כולו,
+        // וכאן התוכן מסתיים מעל הסרגל במקום להיערם מתחתיו.
+        if (plan.BottomAnchor > 0 && _taskbar.MoveTarget is { } anchored)
+        {
+            return $"אזור העבודה צומצם ל-{plan.ExpectedWorkArea}; סרגל המשימות עוגן ב-{anchored} " +
+                   $"ומקומו ({plan.BottomAnchor} פיקסלים) נגרע מהאזור הגלוי.";
+        }
+
+        return $"אזור העבודה צומצם ל-{plan.ExpectedWorkArea}, אך {DescribeShortfall(plan.Shortfall)}";
+    }
+
+    private static string DescribeShortfall(ReservedInsets shortfall) =>
+        $"רצועה בתוך האזור הגלוי נשארת תפוסה (שמאל {shortfall.Left}, למעלה {shortfall.Top}, " +
+        $"ימין {shortfall.Right}, למטה {shortfall.Bottom} פיקסלים) — סרגל המשימות ארוך מהשוליים שהוגדרו.";
+
+    private static uint ToEdge(MarginSide side) => side switch
+    {
+        MarginSide.Left => Native.ABE_LEFT,
+        MarginSide.Top => Native.ABE_TOP,
+        MarginSide.Right => Native.ABE_RIGHT,
+        MarginSide.Bottom => Native.ABE_BOTTOM,
+        _ => throw new ArgumentOutOfRangeException(nameof(side))
+    };
 
     public void Dispose()
     {
@@ -131,6 +219,7 @@ public sealed class WorkAreaHost : IDisposable
 
         _disposed = true;
         Revert();
+        _taskbar.Dispose();
     }
 
     /// <summary>סרגל יישום בודד — חלון הודעות אחד לכל צד.</summary>
@@ -178,7 +267,8 @@ public sealed class WorkAreaHost : IDisposable
 
             Native.SHAppBarMessage(Native.ABM_QUERYPOS, ref data);
 
-            // המערכת מחזירה מיקום מוצע; אם הוא שונה מדי, נכבד את המקסימום שנותר.
+            // המערכת מציבה את הסרגל בצמוד למה שכבר תפוס באותו צד; אנחנו קובעים רק את הגובה
+            // (או הרוחב) שביקשנו — ולכן ההזמנה משלימה את ההקצאה הקיימת ולא מצטברת מעליה.
             switch (_edge)
             {
                 case Native.ABE_LEFT:

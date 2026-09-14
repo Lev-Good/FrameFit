@@ -5,9 +5,25 @@ using FrameFit.Core.Geometry;
 using FrameFit.Platform.Windows.Displays;
 using FrameFit.Platform.Windows.Input;
 using FrameFit.Platform.Windows.Interop;
+using FrameFit.Platform.Windows.WorkArea;
 using Microsoft.Win32;
 
 namespace FrameFit.Platform.Windows.Diagnostics;
+
+/// <summary>מצב אזור העבודה וסרגל המשימות — לדוח האבחון.</summary>
+/// <param name="TaskbarState">מה FrameFit עשה עם סרגל המשימות של המסך המנוהל.</param>
+/// <param name="ExpectedWorkArea">אזור העבודה שאמור להתקבל אחרי הצמצום.</param>
+/// <param name="Shortfall">פיקסלים באזור הגלוי שההקצאות הקיימות תופסות בכל זאת.</param>
+/// <param name="TaskbarAnchor">
+/// פיקסלים בתחתית האזור הגלוי שהוקצו לסרגל המשימות המעוגן. זה אינו "חוסר": התוכן
+/// מסתיים מעל הסרגל, והסרגל יושב מתחתיו בתוך האזור הגלוי.
+/// </param>
+public sealed record WorkAreaStatus(
+    string TaskbarState,
+    PixelRect? ExpectedWorkArea,
+    ReservedInsets Shortfall,
+    string TaskbarDescription,
+    int TaskbarAnchor = 0);
 
 /// <summary>
 /// דוח אבחון לטכנאי: חומרה, חיבורים, אזור עבודה ומצב מנגנוני האכיפה.
@@ -90,7 +106,8 @@ public static class DiagnosticsService
         bool cursorClamped,
         bool watcherActive,
         int refitCount,
-        int uncooperativeCount)
+        int uncooperativeCount,
+        WorkAreaStatus? workAreaStatus = null)
     {
         var builder = new StringBuilder();
 
@@ -138,14 +155,32 @@ public static class DiagnosticsService
             builder.AppendLine($"  חלופה סימטרית (אם הייתה נדרשת עבודת דרייבר): {symmetric}");
 
             var actualWorkArea = GetWorkArea(target) ?? target.WorkArea;
+            var insideVisible = WorkAreaCalculator.Covers(visible, actualWorkArea);
+
             builder.AppendLine($"  אזור עבודה בפועל: {actualWorkArea}");
-            builder.AppendLine($"  אזור העבודה בתוך האזור הגלוי: {(WorkArea.WorkAreaHost.WorkAreaRespectsMargins(target.Bounds, actualWorkArea, margins) ? "כן" : "לא")}");
+            builder.AppendLine($"  אזור עבודה מצופה: {(workAreaStatus?.ExpectedWorkArea is { } expected ? expected.ToString() : "—")}");
+            builder.AppendLine($"  אזור העבודה בתוך האזור הגלוי: {(insideVisible ? "כן" : "לא")}");
+
+            if (workAreaStatus is not null)
+            {
+                builder.AppendLine(workAreaStatus.Shortfall.IsZero
+                    ? "  רצועה תפוסה בתוך האזור הגלוי: אין"
+                    : $"  רצועה תפוסה בתוך האזור הגלוי: {workAreaStatus.Shortfall} פיקסלים");
+
+                if (workAreaStatus.TaskbarAnchor > 0)
+                {
+                    builder.AppendLine($"  רצועת סרגל המשימות המעוגן: {workAreaStatus.TaskbarAnchor} פיקסלים " +
+                                       "בתחתית האזור הגלוי (התוכן מסתיים מעל הסרגל)");
+                }
+                builder.AppendLine($"  סרגל המשימות במסך המנוהל: {workAreaStatus.TaskbarDescription}");
+            }
         }
 
         builder.AppendLine();
         builder.AppendLine("מצב מנגנוני האכיפה:");
         builder.AppendLine($"  שכבת כיסוי שחורה: {(overlayActive ? "פעילה" : "כבויה")}");
         builder.AppendLine($"  צמצום אזור עבודה (AppBar): {(workAreaActive ? "פעיל" : "כבוי")}");
+        builder.AppendLine($"  הטיפול בסרגל המשימות: {workAreaStatus?.TaskbarState ?? "לא ידוע"}");
         builder.AppendLine($"  חסימת סמן העכבר: {(cursorClamped ? "פעילה" : "כבויה")}");
         builder.AppendLine($"  שומר מסך-מלא: {(watcherActive ? "פעיל" : "כבוי")}");
         builder.AppendLine($"  חלונות שהותאמו מאז ההפעלה: {refitCount}");
@@ -162,44 +197,8 @@ public static class DiagnosticsService
     };
 
     /// <summary>קורא את אזור העבודה הנוכחי של המסך ישירות ממערכת ההפעלה.</summary>
-    public static PixelRect? GetWorkArea(DisplayInfo display)
-    {
-        try
-        {
-            var point = new Native.POINT
-            {
-                X = display.Bounds.X + (display.Bounds.Width / 2),
-                Y = display.Bounds.Y + (display.Bounds.Height / 2)
-            };
-
-            var handle = Native.MonitorFromPoint(point, Native.MONITOR_DEFAULTTONEAREST);
-            if (handle == IntPtr.Zero)
-            {
-                return null;
-            }
-
-            var info = new Native.MONITORINFOEX
-            {
-                cbSize = Marshal.SizeOf<Native.MONITORINFOEX>(),
-                szDevice = string.Empty
-            };
-
-            if (!Native.GetMonitorInfo(handle, ref info))
-            {
-                return null;
-            }
-
-            return new PixelRect(
-                info.rcWork.Left,
-                info.rcWork.Top,
-                info.rcWork.Width,
-                info.rcWork.Height);
-        }
-        catch (Exception)
-        {
-            return null;
-        }
-    }
+    public static PixelRect? GetWorkArea(DisplayInfo display) =>
+        WorkAreaProbe.TryGetWorkArea(display.Bounds);
 
     /// <summary>מצב חסימת העכבר כפי שמדווח על ידי מערכת ההפעלה.</summary>
     public static PixelRect? GetCursorClampRect() => CursorClamp.GetCurrent();

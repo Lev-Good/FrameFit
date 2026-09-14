@@ -294,6 +294,51 @@ public sealed class MainViewModel : BindableBase, IDisposable
         }
     }
 
+    /// <summary>סרגל המשימות יוסתר כל עוד ההגדרה פעילה.</summary>
+    public bool TaskbarHide
+    {
+        get => Options.TaskbarMode == TaskbarMode.HideInHiddenArea;
+        set
+        {
+            if (value)
+            {
+                SetTaskbarMode(TaskbarMode.HideInHiddenArea);
+            }
+        }
+    }
+
+    /// <summary>לא נוגעים בסרגל המשימות; הוא נשאר במקומו ותופס את מקומו באזור העבודה.</summary>
+    public bool TaskbarLeave
+    {
+        get => Options.TaskbarMode == TaskbarMode.LeaveInPlace;
+        set
+        {
+            if (value)
+            {
+                SetTaskbarMode(TaskbarMode.LeaveInPlace);
+            }
+        }
+    }
+
+    private void SetTaskbarMode(TaskbarMode mode)
+    {
+        if (Options.TaskbarMode == mode)
+        {
+            return;
+        }
+
+        Options.TaskbarMode = mode;
+        Raise(nameof(TaskbarHide));
+        Raise(nameof(TaskbarLeave));
+    }
+
+    /// <summary>
+    /// ממיר מצב סרגל שאינו נתמך עוד למצב שנתמך. מצב "ניסיון העברה" נמדד כבלתי אפשרי
+    /// ב-Windows 11 (D14), ולכן פרופיל שמור שמכיל אותו נטען כ"יישאר במקומו".
+    /// </summary>
+    private static TaskbarMode NormalizeTaskbarMode(TaskbarMode mode) =>
+        mode == TaskbarMode.MoveIntoVisibleArea ? TaskbarMode.LeaveInPlace : mode;
+
     public bool StartWithWindows
     {
         get => _session.Settings.StartWithWindows;
@@ -385,6 +430,7 @@ public sealed class MainViewModel : BindableBase, IDisposable
             Options.ClampCursor = profile.Options.ClampCursor;
             Options.RefitFullscreen = profile.Options.RefitFullscreen;
             Options.ReserveWorkArea = profile.Options.ReserveWorkArea;
+            Options.TaskbarMode = NormalizeTaskbarMode(profile.Options.TaskbarMode);
 
             _margins = profile.Margins;
 
@@ -392,6 +438,8 @@ public sealed class MainViewModel : BindableBase, IDisposable
             Raise(nameof(ClampCursor));
             Raise(nameof(RefitFullscreen));
             Raise(nameof(ReserveWorkArea));
+            Raise(nameof(TaskbarHide));
+            Raise(nameof(TaskbarLeave));
             StatusText = $"נטענה הגדרה שמורה עבור {SelectedDisplay.FriendlyName}.";
         }
         else

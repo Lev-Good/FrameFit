@@ -12,7 +12,7 @@
   <Package
       Name="FrameFit"
       Manufacturer="Lev-Good"
-      Version="0.1.0.0"
+      Version="0.1.4.0"
       UpgradeCode="7F3A9C41-5B2E-4D8A-9E16-2C4B7D5A1F30"
       Scope="perUser"
       Language="1037"

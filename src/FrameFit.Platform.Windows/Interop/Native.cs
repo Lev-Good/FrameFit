@@ -351,6 +351,9 @@ internal static class Native
     internal static extern bool IsWindowVisible(IntPtr hWnd);
 
     [DllImport("user32.dll")]
+    internal static extern bool IsWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
     internal static extern bool IsIconic(IntPtr hWnd);
 
     [DllImport("user32.dll")]
@@ -475,6 +478,8 @@ internal static class Native
 
     internal const uint WS_POPUP = 0x80000000;
 
+    internal const uint SWP_NOSIZE = 0x0001;
+    internal const uint SWP_NOMOVE = 0x0002;
     internal const uint SWP_NOACTIVATE = 0x0010;
     internal const uint SWP_NOZORDER = 0x0004;
     internal const uint SWP_SHOWWINDOW = 0x0040;
@@ -485,6 +490,7 @@ internal static class Native
     internal static readonly IntPtr HWND_MESSAGE = new(-3);
 
     internal const int SW_HIDE = 0;
+    internal const int SW_SHOW = 5;
     internal const int SW_SHOWNA = 8;
     internal const int SW_RESTORE = 9;
 

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using FrameFit.Core.Abstractions;
 using FrameFit.Core.Geometry;
+using FrameFit.Core.Profiles;
 using FrameFit.Platform.Windows;
 using FrameFit.Platform.Windows.Diagnostics;
 using FrameFit.Platform.Windows.Displays;
@@ -257,36 +258,89 @@ internal static class SelfTest
 
     private static void RunWorkAreaCheck(DisplayInfo target)
     {
-        var margins = VisibleAreaCalculator.Clamp(target.Bounds, new MarginSet(40, 60, 24, 16));
+        Write();
+        Write("בודק את צמצום אזור העבודה (AppBar) ואת עיגון סרגל המשימות. המסך ישתנה לכמה שניות ויחזור...");
+
+        // שני מצבים: שוליים רדודים (קטנים מסרגל המשימות) ושוליים עמוקים (מסגרת עבה).
+        // בשניהם התוכן וסרגל המשימות חייבים למלא יחד את כל האזור הגלוי, בלי רצועה אבודה.
+        CheckWorkAreaCase(target, new MarginSet(40, 60, 24, 16), "שוליים רדודים");
+        CheckWorkAreaCase(target, new MarginSet(196, 213, 37, 410), "שוליים עמוקים");
+    }
+
+    private static void CheckWorkAreaCase(DisplayInfo target, MarginSet requested, string label)
+    {
+        var margins = VisibleAreaCalculator.Clamp(target.Bounds, requested);
         var before = DiagnosticsService.GetWorkArea(target);
 
-        using var workArea = new WorkAreaHost();
+        using var workArea = new WorkAreaHost(Write);
 
-        Write();
-        Write("בודק את צמצום אזור העבודה (AppBar). אזור העבודה של Windows ישתנה לשנייה ויחזור...");
-
-        if (!workArea.TryApply(target.Bounds, margins, out var message))
+        if (!workArea.TryApply(target.Bounds, margins, TaskbarMode.MoveIntoVisibleArea, out var message))
         {
-            Record("צמצום אזור עבודה (AppBar)", false, message);
+            Record($"צמצום אזור עבודה ({label})", false, message);
+            return;
+        }
+
+        var plan = workArea.AppliedPlan;
+        if (plan is null)
+        {
+            Record($"צמצום אזור עבודה ({label})", false, "התוכנית לצמצום לא נוצרה");
             return;
         }
 
         Thread.Sleep(900);
 
         var during = DiagnosticsService.GetWorkArea(target);
-        var matches = during is not null && WorkAreaHost.WorkAreaRespectsMargins(target.Bounds, during.Value, margins);
+        var inside = during is not null && WorkAreaCalculator.StaysInside(plan, during.Value);
+        var matches = during is not null && WorkAreaCalculator.Matches(plan, during.Value);
         var shrank = during is not null && before is not null &&
                      (during.Value.Width < before.Value.Width || during.Value.Height < before.Value.Height);
+
+        var taskbarAttached = workArea.Taskbar.IsAttached;
+        var taskbarMoved = workArea.TaskbarMoved;
+
+        // מלבן הסרגל **בפועל** — לא התוכנית. זה מה שהבדיקה הקודמת החמיצה: היא השוותה
+        // את הסרגל למלבן שתוכנן, ולכן "עברה" גם כשהמערכת החזירה אותו למטה.
+        var taskbarActual = workArea.Taskbar.ReadCurrentRect();
+        var taskbarInOpening = workArea.Taskbar.MoveTarget ?? taskbarActual ?? default;
+        var taskbarAnchored = taskbarMoved && taskbarActual is { } actual && actual == taskbarInOpening;
+
+        // הסרגל חייב להישאר *גלוי* בתוך האזור הגלוי — זו כל מטרת העיגון.
+        var taskbarVisible = !taskbarAttached || workArea.Taskbar.IsVisible;
+
+        // התוכן וסרגל המשימות אמורים למלא יחד את כל האזור הגלוי: בלי חור ובלי חפיפה.
+        var tiles = during is not null && taskbarAnchored &&
+                    during.Value.X == plan.Visible.X &&
+                    during.Value.Width == plan.Visible.Width &&
+                    during.Value.Bottom == taskbarInOpening.Y &&
+                    during.Value.Height + taskbarInOpening.Height == plan.Visible.Height &&
+                    taskbarInOpening.Bottom == plan.Visible.Bottom;
+
+        // המסלול החלופי, שכלל לא היה מכוסה קודם: אם המערכת החזירה את הסרגל לקצה המסך
+        // (מה שנמדד ב-Windows 11), אסור שיישארו פיקסלים גלויים שהוקצו לסרגל שאינו שם.
+        var docked = taskbarActual is { } dockedRect && IsAtScreenBottom(dockedRect, target.Bounds);
+        var noPhantomBand = plan.BottomAnchor == 0 &&
+                            during is not null &&
+                            WorkAreaCalculator.Matches(plan, during.Value);
+        var fallbackOk = !taskbarAnchored && docked && noPhantomBand;
 
         workArea.Revert();
         Thread.Sleep(500);
 
         var after = DiagnosticsService.GetWorkArea(target);
 
-        Write($"  לפני:  {Describe(before)}");
-        Write($"  בזמן:  {Describe(during)}");
-        Write($"  אחרי:  {Describe(after)}");
-        Write($"  מצופה: {VisibleAreaCalculator.Compute(target.Bounds, margins)}");
+        // האימות נקרא מהמערכת עצמה, ולא מהמצב השמור אצלנו — אחרת תקלה שבה הסרגל נשאר
+        // במקום המעוגן הייתה נסתרת מאחורי ערך מיושן.
+        var restoredRect = workArea.Taskbar.ReadCurrentRect() ?? workArea.Taskbar.Rect;
+        var taskbarRestored = !taskbarAttached || IsAtScreenBottom(restoredRect, target.Bounds);
+
+        Write($"  [{label}] שוליים: {margins} | אזור גלוי: {plan.Visible}");
+        Write($"  [{label}] לפני:  {Describe(before)}");
+        Write($"  [{label}] בזמן:  {Describe(during)}");
+        Write($"  [{label}] אחרי:  {Describe(after)}");
+        Write($"  [{label}] מצופה: {plan.ExpectedWorkArea} | הקצאות קיימות: {DescribeReserved(plan)}");
+        Write($"  [{label}] סרגל המשימות: {(taskbarAttached
+            ? $"יעד {taskbarInOpening}, בפועל {taskbarActual?.ToString() ?? "לא ידוע"}, הוחזר אל {restoredRect}"
+            : "לא נמצא במסך הזה")}");
         Write();
 
         var reverted = before is null || after is null ||
@@ -294,14 +348,49 @@ internal static class SelfTest
                         Math.Abs(after.Value.Height - before.Value.Height) <= 4);
 
         Record(
-            "צמצום אזור עבודה (AppBar)",
-            matches,
-            matches
-                ? $"אזור העבודה מצומצם לתוך האזור הגלוי{(shrank ? " (הצטמצם בפועל)" : string.Empty)} — מקסם, Snap וסרגל המשימות יכבדו את השוליים"
-                : "אזור העבודה חורג אל תוך השוליים — הנפילה החלופית (התאמת חלונות) נדרשת");
+            $"צמצום אזור עבודה ({label})",
+            inside,
+            inside
+                ? $"אזור העבודה מצומצם לתוך האזור הגלוי{(shrank ? " (הצטמצם בפועל)" : string.Empty)}, לפי התוכנית {plan.ExpectedWorkArea}"
+                : "אזור העבודה חורג אל תוך השוליים המוסתרים");
 
-        Record("החזרת אזור העבודה למצבו", reverted, reverted ? "המצב שוחזר" : "אזור העבודה לא חזר למצבו המקורי");
+        // זו הבדיקה שחושפת רצועה אבודה בגובה סרגל המשימות: הכלה לבדה אינה מספיקה.
+        // היא דורשת *אחד משני מצבים עקביים*: הסרגל מעוגן והתוכן מסתיים מעליו, או
+        // שהמערכת החזירה אותו לקצה המסך ואז אזור העבודה חייב להיות האזור הגלוי עצמו.
+        Record(
+            $"התוכן וסרגל המשימות ממלאים את האזור הגלוי ({label})",
+            matches && (tiles || fallbackOk),
+            (matches && (tiles || fallbackOk))
+                ? (tiles
+                    ? $"התוכן {Describe(during)} והסרגל {taskbarInOpening} ממלאים יחד את {plan.Visible}"
+                    : $"הסרגל נשאר בקצה המסך ({taskbarActual?.ToString() ?? "לא ידוע"}), " +
+                      $"והתוכן ממלא את כל האזור הגלוי: {Describe(during)}")
+                : $"אזור העבודה בפועל {Describe(during)}, הסרגל בדרך כלל {taskbarActual?.ToString() ?? "לא ידוע"}, " +
+                  $"מצופה {plan.ExpectedWorkArea} — נשאר חור ברצועה או חפיפה באזור הגלוי");
+
+        Record(
+            $"סרגל המשימות של Windows ({label})",
+            !taskbarAttached || (taskbarAnchored && taskbarVisible && taskbarRestored) || fallbackOk,
+            !taskbarAttached
+                ? "אין סרגל משימות במסך הזה — אין מה לעגן"
+                : taskbarAnchored
+                    ? $"עוגן באזור הגלוי ב-{taskbarActual?.ToString()}; נשאר גלוי: {(taskbarVisible ? "כן" : "לא")}; " +
+                      $"הוחזר למקומו בשחזור: {(taskbarRestored ? "כן" : "לא")}"
+                    : $"המערכת החזירה אותו לקצה המסך מיד ({taskbarActual?.ToString() ?? "לא ידוע"}) — " +
+                      $"הוגדר כלא-הועבר, ולא נגזלה רצועה מהאזור הגלוי; הוחזר למקומו: {(taskbarRestored ? "כן" : "לא")}");
+
+        Record(
+            $"החזרת אזור העבודה למצבו ({label})",
+            reverted,
+            reverted ? "המצב שוחזר" : "אזור העבודה לא חזר למצבו המקורי");
     }
+
+    /// <summary>האם מלבן הסרגל הוא שורת התחתית של המסך — כלומר המקום הטבעי שלו.</summary>
+    private static bool IsAtScreenBottom(PixelRect rect, PixelRect monitor) =>
+        rect.Bottom == monitor.Bottom && rect.X == monitor.X && rect.Width == monitor.Width;
+
+    private static string DescribeReserved(WorkAreaPlan plan) =>
+        plan.Shortfall.IsZero ? "אין גזילה מהאזור הגלוי" : $"נגרעים {plan.Shortfall} פיקסלים מהאזור הגלוי";
 
     private static string Describe(PixelRect? rect) => rect is null ? "לא ידוע" : rect.Value.ToString();
 

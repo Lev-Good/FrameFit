@@ -209,6 +209,30 @@ public class ProfileStoreTests : IDisposable
     }
 
     [Fact]
+    public void Load_FromASettingsFileWithTheLegacyHideTaskbarFlag_KeepsTheProfile()
+    {
+        // קובץ הגדרות שנשמר בגרסה קודמת: יש בו HideTaskbar, שכבר אינו קיים, ואין בו
+        // TaskbarMode. השדה הישן אינו אמור להפיל את הטעינה ולא לאפס את ההגדרות —
+        // אחרת המשתמש מאבד את השוליים המדודים שלו בשדרוג.
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(SettingsFile,
+            "{\"SchemaVersion\":1,\"ActiveProfileId\":\"p1\",\"Profiles\":[{\"Id\":\"p1\"," +
+            "\"Margins\":{\"Left\":196,\"Right\":213,\"Top\":37,\"Bottom\":410}," +
+            "\"Options\":{\"BlackoutMargins\":true,\"HideTaskbar\":true}}]}");
+
+        var store = new ProfileStore(SettingsFile);
+        var loaded = store.Load(out var wasReset);
+
+        Assert.False(wasReset);
+        var profile = Assert.Single(loaded.Profiles);
+        Assert.Equal(new MarginSet(196, 213, 37, 410), profile.Margins);
+
+        // ברירת המחדל הנוכחית חלה עליו — הסרגל לא נחשב מוסתר, וגם לא מנוסה להעברה
+        // שאינה אפשרית ב-Windows 11.
+        Assert.Equal(TaskbarMode.LeaveInPlace, profile.Options.TaskbarMode);
+    }
+
+    [Fact]
     public void Load_WithMissingFile_ReturnsDefaultAndReportsReset()
     {
         var store = new ProfileStore(SettingsFile);

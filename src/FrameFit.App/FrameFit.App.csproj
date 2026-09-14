@@ -10,6 +10,16 @@
     <LangVersion>latest</LangVersion>
     <AssemblyName>FrameFit</AssemblyName>
     <RootNamespace>FrameFit.App</RootNamespace>
+    <!--
+      מטא-דאטה של מוצר וזכויות. הוא נכתב לתוך קובץ ההרצה ומופיע בלשונית "פרטים"
+      של Windows, כך שהודעת הזכויות מלווה את התוצר שמופץ ולא רק את המאגר.
+      הגרסה נשמרת זהה לזו של המתקין ב-installer/FrameFit.wxs.
+    -->
+    <Product>FrameFit</Product>
+    <Company>Lev-Good</Company>
+    <Copyright>Copyright (c) 2026 Lev-Good</Copyright>
+    <Version>0.1.4</Version>
+    <Description>התאמת אזור העבודה של Windows לשטח המסך שגלוי בפועל, כולל שוליים לא-סימטריים.</Description>
     <!-- השפה אינה במשאבים חיצוניים; המחרוזות מקודדות בממשק. -->
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>

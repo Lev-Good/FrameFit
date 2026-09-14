@@ -184,6 +184,13 @@
                               IsChecked="{Binding RefitFullscreen}" />
                     <CheckBox Content="צמצום אזור העבודה של Windows — מקסם ו-Snap יכבדו את השוליים (מומלץ)"
                               IsChecked="{Binding ReserveWorkArea}" />
+                    <TextBlock Text="סרגל המשימות של Windows במסך הזה:" Style="{StaticResource Muted}" Margin="0,10,0,4" />
+                    <RadioButton Content="יישאר במקומו — בלי התערבות (מומלץ)"
+                                 IsChecked="{Binding TaskbarLeave}" GroupName="TaskbarMode" />
+                    <RadioButton Content="יוסתר כל עוד ההגדרה פעילה — השוליים ייראו שחורים ואחידים"
+                                 IsChecked="{Binding TaskbarHide}" GroupName="TaskbarMode" />
+                    <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,6"
+                               Text="Windows 11 אינו מתיר להזיז את סרגל המשימות — הוא מחזיר אותו לקצה המסך מיד (נמדד). לכן אין אפשרות להעביר אותו אל תוך האזור הגלוי; צמצום אזור העבודה מקזז את מקומו כך שלא נגזל ממנו דבר. כשהסרגל מוסתר, סמל FrameFit בסרגל המערכת אינו נגיש. בכל המצבים הוא מוחזר ביציאה, ב'שחזר הכול' ובמקש המילוט." />
                     <CheckBox Content="הפעל את FrameFit עם עליית Windows"
                               IsChecked="{Binding StartWithWindows}" />
                 </StackPanel>
